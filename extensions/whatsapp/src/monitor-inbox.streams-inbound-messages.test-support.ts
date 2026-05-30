@@ -5,6 +5,7 @@ import "./monitor-inbox.test-harness.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WhatsAppRetryableInboundError } from "./inbound/dedupe.js";
 import { WHATSAPP_GROUP_METADATA_CACHE_MAX_ENTRIES } from "./inbound/monitor.js";
+import type { WebInboundMessageWithDeprecatedAliases } from "./inbound/types.js";
 import {
   type InboxMonitorOptions,
   buildNotifyMessageUpsert,
@@ -57,10 +58,13 @@ function createSocketRef(): NonNullable<InboxMonitorOptions["socketRef"]> {
   return { current: null };
 }
 
-function inboundMessage(onMessage: ReturnType<typeof vi.fn>, index = 0): Record<string, unknown> {
+function inboundMessage(
+  onMessage: ReturnType<typeof vi.fn>,
+  index = 0,
+): WebInboundMessageWithDeprecatedAliases {
   const msg = onMessage.mock.calls[index]?.[0];
   expect(msg).toBeDefined();
-  return msg as Record<string, unknown>;
+  return msg as WebInboundMessageWithDeprecatedAliases;
 }
 
 async function primeInboundReplyHandle(params: {
