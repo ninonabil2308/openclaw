@@ -4,6 +4,47 @@ import { buildQaCoverageInventory, renderQaCoverageMarkdownReport } from "./cove
 import { readQaScenarioPack } from "./scenario-catalog.js";
 import { buildQaScorecardTaxonomyReport, parseQaScorecardTaxonomy } from "./scorecard-taxonomy.js";
 
+function testScorecardProfiles(categoryId = "runtime.test", profileId = "release") {
+  return [
+    {
+      id: "smoke-ci",
+      description: "Test smoke profile.",
+      categoryIds: profileId === "smoke-ci" ? [categoryId] : [],
+      lanes: [],
+    },
+    {
+      id: "extended",
+      description: "Test extended profile.",
+      categoryIds: profileId === "extended" ? [categoryId] : [],
+      lanes: [],
+    },
+    {
+      id: "release",
+      description: "Test release profile.",
+      categoryIds: profileId === "release" ? [categoryId] : [],
+      lanes: [],
+    },
+    {
+      id: "soak",
+      description: "Test soak profile.",
+      categoryIds: profileId === "soak" ? [categoryId] : [],
+      lanes: [],
+    },
+    {
+      id: "advisory",
+      description: "Test advisory profile.",
+      categoryIds: profileId === "advisory" ? [categoryId] : [],
+      lanes: [],
+    },
+    {
+      id: "manual",
+      description: "Test manual profile.",
+      categoryIds: profileId === "manual" ? [categoryId] : [],
+      lanes: [],
+    },
+  ];
+}
+
 describe("qa coverage report", () => {
   it("groups scenario coverage metadata by theme and surface", () => {
     const inventory = buildQaCoverageInventory(readQaScenarioPack().scenarios);
@@ -22,6 +63,7 @@ describe("qa coverage report", () => {
     ]);
     expect(inventory.scorecardTaxonomy.taxonomyId).toBe("stable-lts-initial");
     expect(inventory.scorecardTaxonomy.reportOnly).toBe(true);
+    expect(inventory.scorecardTaxonomy.profileCount).toBe(6);
     expect(inventory.scorecardTaxonomy.categoryCount).toBe(16);
     expect(inventory.scorecardTaxonomy.ltsIncludedCategoryCount).toBe(7);
     expect(inventory.scorecardTaxonomy.deferredCategoryCount).toBe(8);
@@ -31,6 +73,19 @@ describe("qa coverage report", () => {
     expect(inventory.scorecardTaxonomy.mappedScenarioCount).toBeGreaterThan(0);
     expect(inventory.scorecardTaxonomy.unmappedCoverageIdCount).toBeGreaterThan(0);
     expect(inventory.scorecardTaxonomy.validationIssues).toStrictEqual([]);
+    expect(
+      inventory.scorecardTaxonomy.profiles
+        .find((profile) => profile.id === "release")
+        ?.categoryIds.toSorted(),
+    ).toEqual([
+      "plugins.runtime",
+      "providers.openai",
+      "runtime.agent.turns",
+      "runtime.context.compaction",
+      "runtime.tools.approval",
+      "runtime.tools.core",
+      "security.secrets",
+    ]);
     expect(inventory.scenarioPacks.map((pack) => pack.id)).toEqual([
       "observability",
       "personal-agent",
@@ -75,8 +130,12 @@ describe("qa coverage report", () => {
     expect(report).toContain("## Scorecard Taxonomy");
     expect(report).toContain("- Taxonomy: stable-lts-initial (report-only)");
     expect(report).toContain("- Categories: 16 (7 LTS-included, 8 deferred, 1 advisory)");
+    expect(report).toContain("- Profiles: 6");
     expect(report).toContain(
-      "- runtime.tools.core (lts-included, release-blocking, mapped): coverage: tools.apply-patch, tools.exec, tools.fs.read, tools.fs.write, tools.web-search;",
+      "- smoke-ci: 9 categories; lanes: qa-lab-smoke-ci, openclaw-multipass-channel-smoke;",
+    );
+    expect(report).toContain(
+      "- runtime.tools.core (lts-included, release-blocking, mapped): profiles: release, smoke-ci; coverage: tools.apply-patch, tools.exec, tools.fs.read, tools.fs.write, tools.web-search;",
     );
     expect(report).toContain("### Unmapped Coverage IDs");
     expect(report).toContain("agents.subagents");
@@ -92,6 +151,7 @@ describe("qa coverage report", () => {
       mappingAuthority: "scaffold",
       mappingOwner: "@kevinlin-openai",
       reportOnly: true,
+      profiles: testScorecardProfiles(),
       categories: [
         {
           id: "runtime.test",
@@ -103,7 +163,7 @@ describe("qa coverage report", () => {
           requirement: "Exercise a missing mapping.",
           evidenceRequired: "A real scenario mapping before promotion.",
           evidence: {
-            requiredTiers: ["core"],
+            profiles: ["release"],
             liveProofRequired: false,
             freshness: "target-ref",
             coverageIds: ["runtime.missing-coverage"],
@@ -131,6 +191,51 @@ describe("qa coverage report", () => {
     ]);
   });
 
+  it("reports release-blocking categories missing release profile membership", () => {
+    const taxonomy = parseQaScorecardTaxonomy({
+      version: 1,
+      id: "test-taxonomy",
+      title: "Test taxonomy",
+      sourceRef: "docs/concepts/qa-e2e-automation.md",
+      status: "initial",
+      mappingAuthority: "scaffold",
+      mappingOwner: "@kevinlin-openai",
+      reportOnly: true,
+      profiles: testScorecardProfiles("runtime.test", "smoke-ci"),
+      categories: [
+        {
+          id: "runtime.test",
+          surfaceId: "runtime.gateway",
+          surfaceName: "Runtime",
+          categoryName: "Release profile missing",
+          supportStatus: "lts-included",
+          releaseBlocking: true,
+          requirement: "Release-blocking rows must be selected by the release profile.",
+          evidenceRequired: "Release profile membership before promotion.",
+          evidence: {
+            profiles: ["smoke-ci"],
+            liveProofRequired: false,
+            freshness: "target-ref",
+            coverageIds: ["channels.dm"],
+            scenarioRefs: ["qa/scenarios/channels/dm-chat-baseline.md"],
+            docsRefs: ["docs/concepts/qa-e2e-automation.md"],
+            codeRefs: ["extensions/qa-lab/src/suite.ts"],
+          },
+        },
+      ],
+    });
+
+    const report = buildQaScorecardTaxonomyReport({
+      taxonomy,
+      repoRoot: process.cwd(),
+      scenarios: readQaScenarioPack().scenarios,
+    });
+
+    expect(report.validationIssues.map((issue) => issue.code)).toEqual([
+      "release-blocking-category-missing-release-profile",
+    ]);
+  });
+
   it("rejects taxonomy refs outside the repository", () => {
     expect(() =>
       parseQaScorecardTaxonomy({
@@ -142,6 +247,7 @@ describe("qa coverage report", () => {
         mappingAuthority: "scaffold",
         mappingOwner: "@kevinlin-openai",
         reportOnly: true,
+        profiles: testScorecardProfiles("runtime.test", "smoke-ci"),
         categories: [
           {
             id: "runtime.test",
@@ -153,7 +259,7 @@ describe("qa coverage report", () => {
             requirement: "Reject escaped refs.",
             evidenceRequired: "Parser rejects refs outside the repository.",
             evidence: {
-              requiredTiers: ["core"],
+              profiles: ["smoke-ci"],
               liveProofRequired: false,
               freshness: "target-ref",
               coverageIds: ["runtime.delivery"],

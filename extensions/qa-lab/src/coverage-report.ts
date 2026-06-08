@@ -326,11 +326,24 @@ function pushScorecardTaxonomyLines(lines: string[], report: QaScorecardTaxonomy
   lines.push(
     `- Categories: ${report.categoryCount} (${report.ltsIncludedCategoryCount} LTS-included, ${report.deferredCategoryCount} deferred, ${report.advisoryCategoryCount} advisory)`,
   );
+  lines.push(`- Profiles: ${report.profileCount}`);
   lines.push(`- Future blocking categories: ${report.releaseBlockingCategoryCount}`);
   lines.push(`- Mapped coverage IDs: ${report.mappedCoverageIdCount}`);
   lines.push(`- Mapped scenarios: ${report.mappedScenarioCount}`);
   lines.push(`- Unmapped coverage IDs: ${report.unmappedCoverageIdCount}`);
   lines.push(`- Validation warnings: ${report.validationIssueCount}`, "");
+
+  if (report.profiles.length > 0) {
+    lines.push("### Profiles", "");
+    for (const profile of report.profiles) {
+      const categories = profile.categoryIds.length > 0 ? profile.categoryIds.join(", ") : "none";
+      const lanes = profile.laneIds.length > 0 ? profile.laneIds.join(", ") : "none";
+      lines.push(
+        `- ${profile.id}: ${profile.categoryIds.length} categories; lanes: ${lanes}; categories: ${categories}`,
+      );
+    }
+    lines.push("");
+  }
 
   if (report.categories.length > 0) {
     lines.push("### Category Mapping", "");
@@ -339,8 +352,9 @@ function pushScorecardTaxonomyLines(lines: string[], report: QaScorecardTaxonomy
       const coverage = category.coverageIds.length > 0 ? category.coverageIds.join(", ") : "none";
       const scenarios =
         category.scenarioRefs.length > 0 ? category.scenarioRefs.join(", ") : "none";
+      const profiles = category.profiles.length > 0 ? category.profiles.join(", ") : "none";
       lines.push(
-        `- ${category.id} (${category.supportStatus}, ${blocking}, ${category.mappingStatus}): coverage: ${coverage}; scenarios: ${scenarios}`,
+        `- ${category.id} (${category.supportStatus}, ${blocking}, ${category.mappingStatus}): profiles: ${profiles}; coverage: ${coverage}; scenarios: ${scenarios}`,
       );
     }
     lines.push("");

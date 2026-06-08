@@ -28,13 +28,13 @@ const qaScorecardRepoRefSchema = z
     message: "repo refs must not be absolute or contain parent-directory segments",
   });
 
-const qaScorecardEvidenceTierSchema = z.enum([
-  "core",
+const qaScorecardProfileIdSchema = z.enum([
+  "smoke-ci",
   "extended",
   "release",
   "soak",
-  "manual",
   "advisory",
+  "manual",
 ]);
 
 const qaScorecardFreshnessRuleSchema = z.enum([
@@ -46,6 +46,23 @@ const qaScorecardFreshnessRuleSchema = z.enum([
 
 const qaScorecardSupportStatusSchema = z.enum(["lts-included", "deferred", "advisory"]);
 
+const qaScorecardProfileLaneSchema = z.object({
+  id: qaScorecardIdSchema,
+  description: z.string().trim().min(1),
+  command: z.string().trim().min(1).optional(),
+  runner: z.string().trim().min(1).optional(),
+  channelDriver: z.string().trim().min(1).optional(),
+  surfaceIds: z.array(qaScorecardIdSchema).default([]),
+  categoryIds: z.array(qaScorecardIdSchema).default([]),
+});
+
+const qaScorecardProfileSchema = z.object({
+  id: qaScorecardProfileIdSchema,
+  description: z.string().trim().min(1),
+  categoryIds: z.array(qaScorecardIdSchema).default([]),
+  lanes: z.array(qaScorecardProfileLaneSchema).default([]),
+});
+
 const qaScorecardCategorySchema = z.object({
   id: qaScorecardIdSchema,
   surfaceId: qaScorecardIdSchema,
@@ -56,7 +73,7 @@ const qaScorecardCategorySchema = z.object({
   requirement: z.string().trim().min(1),
   evidenceRequired: z.string().trim().min(1),
   evidence: z.object({
-    requiredTiers: z.array(qaScorecardEvidenceTierSchema).min(1),
+    profiles: z.array(qaScorecardProfileIdSchema).min(1),
     liveProofRequired: z.boolean(),
     freshness: qaScorecardFreshnessRuleSchema,
     coverageIds: z.array(qaScorecardIdSchema).default([]),
@@ -78,10 +95,58 @@ const qaScorecardTaxonomySchema = z
     mappingOwner: z.string().trim().min(1),
     reportOnly: z.boolean(),
     notes: z.string().trim().min(1).optional(),
+    profiles: z.array(qaScorecardProfileSchema).min(1),
     categories: z.array(qaScorecardCategorySchema).min(1),
   })
   .superRefine((taxonomy, ctx) => {
+    const seenProfileIds = new Set<string>();
+    for (const [profileIndex, profile] of taxonomy.profiles.entries()) {
+      if (seenProfileIds.has(profile.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["profiles", profileIndex, "id"],
+          message: `duplicate scorecard profile id: ${profile.id}`,
+        });
+      }
+      seenProfileIds.add(profile.id);
+
+      const seenProfileCategoryIds = new Set<string>();
+      for (const [categoryIndex, categoryId] of profile.categoryIds.entries()) {
+        if (seenProfileCategoryIds.has(categoryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["profiles", profileIndex, "categoryIds", categoryIndex],
+            message: `duplicate category id in profile ${profile.id}: ${categoryId}`,
+          });
+        }
+        seenProfileCategoryIds.add(categoryId);
+      }
+
+      const seenLaneIds = new Set<string>();
+      for (const [laneIndex, lane] of profile.lanes.entries()) {
+        if (seenLaneIds.has(lane.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["profiles", profileIndex, "lanes", laneIndex, "id"],
+            message: `duplicate lane id in profile ${profile.id}: ${lane.id}`,
+          });
+        }
+        seenLaneIds.add(lane.id);
+      }
+    }
+
+    for (const requiredProfileId of qaScorecardProfileIdSchema.options) {
+      if (!seenProfileIds.has(requiredProfileId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["profiles"],
+          message: `missing required scorecard profile id: ${requiredProfileId}`,
+        });
+      }
+    }
+
     const seenCategoryIds = new Set<string>();
+    const seenSurfaceIds = new Set<string>();
     for (const [categoryIndex, category] of taxonomy.categories.entries()) {
       if (seenCategoryIds.has(category.id)) {
         ctx.addIssue({
@@ -91,6 +156,7 @@ const qaScorecardTaxonomySchema = z
         });
       }
       seenCategoryIds.add(category.id);
+      seenSurfaceIds.add(category.surfaceId);
 
       if (category.supportStatus === "lts-included" && !category.releaseBlocking) {
         ctx.addIssue({
@@ -119,6 +185,38 @@ const qaScorecardTaxonomySchema = z
         seenCoverageIds.add(coverageId);
       }
     }
+
+    for (const [profileIndex, profile] of taxonomy.profiles.entries()) {
+      for (const [categoryIndex, categoryId] of profile.categoryIds.entries()) {
+        if (!seenCategoryIds.has(categoryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["profiles", profileIndex, "categoryIds", categoryIndex],
+            message: `profile ${profile.id} references unknown category ${categoryId}`,
+          });
+        }
+      }
+      for (const [laneIndex, lane] of profile.lanes.entries()) {
+        for (const [surfaceIndex, surfaceId] of lane.surfaceIds.entries()) {
+          if (!seenSurfaceIds.has(surfaceId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["profiles", profileIndex, "lanes", laneIndex, "surfaceIds", surfaceIndex],
+              message: `profile ${profile.id} lane ${lane.id} references unknown surface ${surfaceId}`,
+            });
+          }
+        }
+        for (const [categoryIndex, categoryId] of lane.categoryIds.entries()) {
+          if (!seenCategoryIds.has(categoryId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["profiles", profileIndex, "lanes", laneIndex, "categoryIds", categoryIndex],
+              message: `profile ${profile.id} lane ${lane.id} references unknown category ${categoryId}`,
+            });
+          }
+        }
+      }
+    }
   });
 
 export type QaScorecardTaxonomy = z.infer<typeof qaScorecardTaxonomySchema>;
@@ -132,6 +230,10 @@ export type QaScorecardValidationIssueCode =
   | "code-ref-not-found"
   | "source-ref-not-found"
   | "blocking-category-without-evidence-mapping"
+  | "release-blocking-category-missing-release-profile"
+  | "category-profile-missing-top-level-membership"
+  | "profile-membership-missing-category-profile"
+  | "profile-lane-misuses-multipass-runner"
   | "taxonomy-fixture-not-found";
 
 export type QaScorecardValidationIssue = {
@@ -149,13 +251,19 @@ export type QaScorecardCategoryMappingReport = {
   supportStatus: string;
   releaseBlocking: boolean;
   mappingStatus: "mapped" | "partial" | "missing";
-  requiredTiers: string[];
+  profiles: string[];
   liveProofRequired: boolean;
   freshness: string;
   coverageIds: string[];
   scenarioRefs: string[];
   missingCoverageIds: string[];
   missingScenarioRefs: string[];
+};
+
+export type QaScorecardProfileReport = {
+  id: string;
+  categoryIds: string[];
+  laneIds: string[];
 };
 
 export type QaScorecardTaxonomyReport = {
@@ -166,6 +274,8 @@ export type QaScorecardTaxonomyReport = {
   mappingAuthority: string | null;
   mappingOwner: string | null;
   reportOnly: boolean;
+  profileCount: number;
+  profiles: QaScorecardProfileReport[];
   categoryCount: number;
   releaseBlockingCategoryCount: number;
   advisoryCategoryCount: number;
@@ -291,6 +401,8 @@ export function buildQaScorecardTaxonomyReport(params: {
       mappingAuthority: null,
       mappingOwner: null,
       reportOnly: true,
+      profileCount: 0,
+      profiles: [],
       categoryCount: 0,
       releaseBlockingCategoryCount: 0,
       advisoryCategoryCount: 0,
@@ -325,6 +437,34 @@ export function buildQaScorecardTaxonomyReport(params: {
   const categories: QaScorecardCategoryMappingReport[] = [];
   const mappedCoverageIds = new Set<string>();
   const mappedScenarioRefs = new Set<string>();
+  const categoryIds = new Set(params.taxonomy.categories.map((category) => category.id));
+  const profileCategoryIdsByCategoryId = new Map<string, Set<string>>();
+  const profiles = params.taxonomy.profiles.map((profile) => {
+    for (const categoryId of profile.categoryIds) {
+      const profileIds = profileCategoryIdsByCategoryId.get(categoryId) ?? new Set<string>();
+      profileIds.add(profile.id);
+      profileCategoryIdsByCategoryId.set(categoryId, profileIds);
+    }
+
+    for (const lane of profile.lanes) {
+      const runner = lane.runner?.toLowerCase();
+      const command = lane.command?.toLowerCase() ?? "";
+      if (runner === "multipass" || /--runner\s+['"]?multipass\b/u.test(command)) {
+        issues.push({
+          code: "profile-lane-misuses-multipass-runner",
+          severity: "warning",
+          ref: lane.id,
+          message: `${profile.id} lane ${lane.id} uses multipass as a runner; RFC 0007 multipass means the openclaw/multipass channel SDK driver on a host runner`,
+        });
+      }
+    }
+
+    return {
+      id: profile.id,
+      categoryIds: profile.categoryIds.filter((categoryId) => categoryIds.has(categoryId)),
+      laneIds: profile.lanes.map((lane) => lane.id),
+    };
+  });
 
   if (!pathExists(params.repoRoot, params.taxonomy.sourceRef)) {
     issues.push({
@@ -338,6 +478,44 @@ export function buildQaScorecardTaxonomyReport(params: {
   for (const category of params.taxonomy.categories) {
     const missingCoverageIds: string[] = [];
     const missingScenarioRefs: string[] = [];
+    const declaredProfileIds = new Set(category.evidence.profiles);
+    const membershipProfileIds =
+      profileCategoryIdsByCategoryId.get(category.id) ?? new Set<string>();
+    const sortedMembershipProfileIds = [...membershipProfileIds].toSorted();
+
+    for (const profileId of declaredProfileIds) {
+      if (!membershipProfileIds.has(profileId)) {
+        issues.push({
+          code: "category-profile-missing-top-level-membership",
+          severity: "warning",
+          categoryId: category.id,
+          ref: profileId,
+          message: `${category.id} declares ${profileId} evidence, but the taxonomy profile does not include the category`,
+        });
+      }
+    }
+
+    for (const profileId of membershipProfileIds) {
+      if (!declaredProfileIds.has(profileId)) {
+        issues.push({
+          code: "profile-membership-missing-category-profile",
+          severity: "warning",
+          categoryId: category.id,
+          ref: profileId,
+          message: `${category.id} belongs to the ${profileId} taxonomy profile, but its evidence profiles do not declare that selector`,
+        });
+      }
+    }
+
+    if (category.releaseBlocking && !membershipProfileIds.has("release")) {
+      issues.push({
+        code: "release-blocking-category-missing-release-profile",
+        severity: "warning",
+        categoryId: category.id,
+        ref: "release",
+        message: `${category.id} is release-blocking but is not selected by the release profile`,
+      });
+    }
 
     for (const coverageId of category.evidence.coverageIds) {
       const scenarioRefs = scenarioRefsByCoverageId.get(coverageId);
@@ -430,7 +608,7 @@ export function buildQaScorecardTaxonomyReport(params: {
       supportStatus: category.supportStatus,
       releaseBlocking: category.releaseBlocking,
       mappingStatus,
-      requiredTiers: [...category.evidence.requiredTiers],
+      profiles: sortedMembershipProfileIds,
       liveProofRequired: category.evidence.liveProofRequired,
       freshness: category.evidence.freshness,
       coverageIds: [...category.evidence.coverageIds],
@@ -453,6 +631,8 @@ export function buildQaScorecardTaxonomyReport(params: {
     mappingAuthority: params.taxonomy.mappingAuthority,
     mappingOwner: params.taxonomy.mappingOwner,
     reportOnly: params.taxonomy.reportOnly,
+    profileCount: params.taxonomy.profiles.length,
+    profiles,
     categoryCount: params.taxonomy.categories.length,
     releaseBlockingCategoryCount: params.taxonomy.categories.filter(
       (category) => category.releaseBlocking,
