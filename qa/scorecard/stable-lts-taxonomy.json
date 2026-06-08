@@ -11,15 +11,20 @@
   "profiles": [
     {
       "id": "smoke-ci",
-      "description": "Small deterministic PR and merge selector backed by mock providers, qa-channel, and SDK-backed channel smoke evidence.",
+      "description": "Deterministic PR and merge proof with mock model providers, synthetic qa-channel, and local SDK-backed channel upstreams; no live external service required.",
       "categoryIds": [
         "runtime.agent.turns",
         "runtime.context.compaction",
         "runtime.tools.core",
         "runtime.tools.approval",
+        "runtime.observability.trace",
         "channels.qa",
         "memory.recall",
+        "memory.failure",
+        "automation.cron",
         "plugins.runtime",
+        "media.input",
+        "media.output",
         "ui.control",
         "security.secrets"
       ],
@@ -29,14 +34,36 @@
           "description": "Deterministic QA Lab scenario pack with mock OpenAI-compatible provider responses and qa-channel transport.",
           "runner": "host",
           "channelDriver": "native",
-          "surfaceIds": ["runtime.gateway", "tools", "channels", "plugins", "security"],
+          "providerMode": "mock-openai",
+          "modelLive": false,
+          "channelLive": false,
+          "packageSource": "source-checkout",
+          "surfaceIds": [
+            "runtime.gateway",
+            "tools",
+            "observability",
+            "channels",
+            "memory.sessions",
+            "automation",
+            "plugins",
+            "media",
+            "ui.cli",
+            "security"
+          ],
           "categoryIds": [
             "runtime.agent.turns",
             "runtime.context.compaction",
             "runtime.tools.core",
             "runtime.tools.approval",
+            "runtime.observability.trace",
             "channels.qa",
+            "memory.recall",
+            "memory.failure",
+            "automation.cron",
             "plugins.runtime",
+            "media.input",
+            "media.output",
+            "ui.control",
             "security.secrets"
           ]
         },
@@ -45,117 +72,71 @@
           "description": "openclaw/multipass SDK-backed deterministic messaging-channel evidence on a host runner.",
           "runner": "host",
           "channelDriver": "multipass",
+          "providerMode": "mock-openai",
+          "modelLive": false,
+          "channelLive": false,
+          "packageSource": "source-checkout",
           "surfaceIds": ["channels"],
           "categoryIds": ["channels.qa", "runtime.tools.approval"]
         }
       ]
     },
     {
-      "id": "extended",
-      "description": "Broader deterministic selector for non-blocking and deferred categories that should stay visible before promotion.",
-      "categoryIds": [
-        "runtime.context.compaction",
-        "runtime.observability.trace",
-        "memory.recall",
-        "memory.failure",
-        "automation.cron",
-        "media.input",
-        "media.output",
-        "ui.control"
-      ],
-      "lanes": [
-        {
-          "id": "qa-lab-extended",
-          "description": "Extended QA Lab scenario coverage for deferred runtime, memory, automation, media, and UI evidence.",
-          "runner": "host",
-          "channelDriver": "native",
-          "surfaceIds": ["runtime.gateway", "observability", "memory.sessions", "automation", "media", "ui.cli"],
-          "categoryIds": [
-            "runtime.context.compaction",
-            "runtime.observability.trace",
-            "memory.recall",
-            "memory.failure",
-            "automation.cron",
-            "media.input",
-            "media.output",
-            "ui.control"
-          ]
-        }
-      ]
-    },
-    {
       "id": "release",
-      "description": "Release-candidate selector for Stable/LTS release-blocking categories and live proof where required.",
+      "description": "Stable/LTS proof selector for live providers, live channels, package artifacts, upgrade paths, and platform proof where the claim depends on real upstreams or release artifacts.",
       "categoryIds": [
         "runtime.agent.turns",
         "runtime.context.compaction",
         "runtime.tools.core",
         "runtime.tools.approval",
+        "runtime.observability.trace",
         "providers.openai",
+        "memory.recall",
+        "memory.failure",
+        "automation.cron",
         "plugins.runtime",
+        "media.input",
+        "media.output",
+        "ui.control",
         "security.secrets"
       ],
       "lanes": [
         {
           "id": "qa-lab-release",
-          "description": "Release-candidate QA Lab evidence for all current release-blocking scorecard categories.",
+          "description": "Release-candidate QA Lab evidence joined with live/provider/package/platform artifacts for Stable/LTS scorecard proof.",
           "runner": "host",
           "channelDriver": "native",
-          "surfaceIds": ["runtime.gateway", "tools", "providers", "plugins", "security"],
+          "modelLive": true,
+          "channelLive": false,
+          "packageSource": "release-artifact",
+          "surfaceIds": [
+            "runtime.gateway",
+            "tools",
+            "observability",
+            "providers",
+            "memory.sessions",
+            "automation",
+            "plugins",
+            "media",
+            "ui.cli",
+            "security"
+          ],
           "categoryIds": [
             "runtime.agent.turns",
             "runtime.context.compaction",
             "runtime.tools.core",
             "runtime.tools.approval",
+            "runtime.observability.trace",
             "providers.openai",
+            "memory.recall",
+            "memory.failure",
+            "automation.cron",
             "plugins.runtime",
+            "media.input",
+            "media.output",
+            "ui.control",
             "security.secrets"
           ]
-        }
-      ]
-    },
-    {
-      "id": "soak",
-      "description": "Long-running repeated-proof selector reserved for durability, timing, and high-turn-count evidence.",
-      "categoryIds": [],
-      "lanes": [
-        {
-          "id": "qa-lab-soak-placeholder",
-          "description": "Reserved profile lane for future high-turn-count and repeated timing proof.",
-          "runner": "host",
-          "channelDriver": "native",
-          "surfaceIds": [],
-          "categoryIds": []
-        }
-      ]
-    },
-    {
-      "id": "advisory",
-      "description": "Non-blocking advisory selector for ecosystem and compatibility rows that should not fail release gates.",
-      "categoryIds": ["plugins.external.compat"],
-      "lanes": [
-        {
-          "id": "plugin-compat-advisory",
-          "description": "Advisory plugin compatibility corpus summary outside the release-blocking scorecard.",
-          "runner": "host",
-          "channelDriver": "native",
-          "surfaceIds": ["plugins"],
-          "categoryIds": ["plugins.external.compat"]
-        }
-      ]
-    },
-    {
-      "id": "manual",
-      "description": "Manual evidence selector for rows that need human-run release proof before automation exists.",
-      "categoryIds": [],
-      "lanes": [
-        {
-          "id": "manual-evidence-placeholder",
-          "description": "Reserved profile lane for manually attached scorecard evidence.",
-          "runner": "host",
-          "channelDriver": "native",
-          "surfaceIds": [],
-          "categoryIds": []
         }
       ]
     }
@@ -169,7 +150,7 @@
       "supportStatus": "lts-included",
       "releaseBlocking": true,
       "requirement": "A normal user turn streams, calls tools when needed, finishes once, and records visible transcript evidence.",
-      "evidenceRequired": "Core QA Lab scenarios plus runtime e2e evidence on the target ref.",
+      "evidenceRequired": "Deterministic QA Lab scenarios plus runtime e2e evidence on the target ref.",
       "evidence": {
         "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
@@ -196,7 +177,7 @@
       "requirement": "Long sessions compact or recover without hiding replay-unsafe mutating work.",
       "evidenceRequired": "QA Lab long-context or compaction scenario plus focused runtime e2e proof.",
       "evidence": {
-        "profiles": ["smoke-ci", "extended", "release"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref",
         "coverageIds": ["runtime.compaction", "runtime.retry-policy"],
@@ -274,7 +255,7 @@
       "requirement": "User-visible runs emit bounded trace/run diagnostics with enough IDs to debug release failures without leaking secrets.",
       "evidenceRequired": "QA Lab telemetry scenario plus OTEL or Prometheus smoke; deferred because the LTS proposal includes health/logging/session diagnostics first and leaves telemetry export hardening for later.",
       "evidence": {
-        "profiles": ["extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref",
         "coverageIds": ["telemetry.otel", "telemetry.prometheus", "harness.qa-lab"],
@@ -319,7 +300,7 @@
       "supportStatus": "deferred",
       "releaseBlocking": false,
       "requirement": "The synthetic channel covers portable channel contract behavior used by normal PR CI.",
-      "evidenceRequired": "Core QA Lab qa-channel lane.",
+      "evidenceRequired": "Deterministic QA Lab qa-channel lane.",
       "evidence": {
         "profiles": ["smoke-ci"],
         "liveProofRequired": false,
@@ -353,7 +334,7 @@
       "requirement": "User preference and session memory recall work through normal conversation flow without crossing thread or channel boundaries.",
       "evidenceRequired": "QA Lab memory scenarios; deferred because the LTS proposal includes session/context categories but explicitly leaves Memory outside the initial slice.",
       "evidence": {
-        "profiles": ["smoke-ci", "extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref",
         "coverageIds": ["memory.recall", "memory.active-recall", "memory.thread-isolation"],
@@ -376,7 +357,7 @@
       "requirement": "Memory store failure produces visible fallback behavior without losing the active turn.",
       "evidenceRequired": "QA Lab memory failure scenario; deferred with Memory until the support boundary is accepted.",
       "evidence": {
-        "profiles": ["extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref",
         "coverageIds": ["memory.failure-handling", "runtime.fallbacks"],
@@ -395,7 +376,7 @@
       "requirement": "Natural-language cron creation, due-run execution, duplicate prevention, delivery, and run history work end to end.",
       "evidenceRequired": "QA Lab scheduling scenarios plus live delivery for release channel claims; deferred because Automation is a first-wave non-LTS candidate, not part of the proposed initial LTS slice.",
       "evidence": {
-        "profiles": ["extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref-and-release-package",
         "coverageIds": ["scheduling.cron", "scheduling.dedup"],
@@ -446,7 +427,7 @@
       "requirement": "Image, audio, or file input is staged, summarized, redacted where needed, and usable in a normal agent turn.",
       "evidenceRequired": "QA Lab media scenarios plus live media lane for release claims; deferred because media is outside the proposed initial LTS support boundary.",
       "evidence": {
-        "profiles": ["extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "release-candidate",
         "coverageIds": ["media.image-understanding"],
@@ -468,7 +449,7 @@
       "requirement": "Generated image, TTS, or other media output reaches the requested channel or artifact path with usable metadata.",
       "evidenceRequired": "QA Lab media generation scenarios plus channel media lane for release claims; deferred because media generation is explicitly outside the initial LTS priority.",
       "evidence": {
-        "profiles": ["extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "release-candidate",
         "coverageIds": ["media.image-generation", "tools.image-generate", "tools.tts"],
@@ -492,7 +473,7 @@
       "requirement": "Control UI can start, observe, and recover Gateway-backed runs with browser proof on supported viewports.",
       "evidenceRequired": "Control UI e2e shard or QA Lab Control UI scenario; deferred because Gateway Web App is a first-wave non-LTS candidate.",
       "evidence": {
-        "profiles": ["smoke-ci", "extended"],
+        "profiles": ["smoke-ci", "release"],
         "liveProofRequired": false,
         "freshness": "target-ref",
         "coverageIds": ["ui.control", "channels.qa-channel", "media.image-understanding"],
@@ -533,7 +514,7 @@
       "requirement": "External plugin corpus remains advisory unless a release explicitly claims ecosystem compatibility for that package set.",
       "evidenceRequired": "Crabpot or plugin-inspector advisory summary.",
       "evidence": {
-        "profiles": ["advisory"],
+        "profiles": [],
         "liveProofRequired": false,
         "freshness": "latest-advisory-run",
         "coverageIds": [],

@@ -28,14 +28,7 @@ const qaScorecardRepoRefSchema = z
     message: "repo refs must not be absolute or contain parent-directory segments",
   });
 
-const qaScorecardProfileIdSchema = z.enum([
-  "smoke-ci",
-  "extended",
-  "release",
-  "soak",
-  "advisory",
-  "manual",
-]);
+const qaScorecardProfileIdSchema = z.enum(["smoke-ci", "release"]);
 
 const qaScorecardFreshnessRuleSchema = z.enum([
   "target-ref",
@@ -52,6 +45,10 @@ const qaScorecardProfileLaneSchema = z.object({
   command: z.string().trim().min(1).optional(),
   runner: z.string().trim().min(1).optional(),
   channelDriver: z.string().trim().min(1).optional(),
+  providerMode: z.string().trim().min(1).optional(),
+  modelLive: z.boolean().optional(),
+  channelLive: z.boolean().optional(),
+  packageSource: z.string().trim().min(1).optional(),
   surfaceIds: z.array(qaScorecardIdSchema).default([]),
   categoryIds: z.array(qaScorecardIdSchema).default([]),
 });
@@ -73,7 +70,7 @@ const qaScorecardCategorySchema = z.object({
   requirement: z.string().trim().min(1),
   evidenceRequired: z.string().trim().min(1),
   evidence: z.object({
-    profiles: z.array(qaScorecardProfileIdSchema).min(1),
+    profiles: z.array(qaScorecardProfileIdSchema).default([]),
     liveProofRequired: z.boolean(),
     freshness: qaScorecardFreshnessRuleSchema,
     coverageIds: z.array(qaScorecardIdSchema).default([]),
@@ -230,7 +227,9 @@ export type QaScorecardValidationIssueCode =
   | "code-ref-not-found"
   | "source-ref-not-found"
   | "blocking-category-without-evidence-mapping"
+  | "non-advisory-category-missing-profile-membership"
   | "release-blocking-category-missing-release-profile"
+  | "advisory-category-has-profile-membership"
   | "category-profile-missing-top-level-membership"
   | "profile-membership-missing-category-profile"
   | "profile-lane-misuses-multipass-runner"
@@ -514,6 +513,34 @@ export function buildQaScorecardTaxonomyReport(params: {
         categoryId: category.id,
         ref: "release",
         message: `${category.id} is release-blocking but is not selected by the release profile`,
+      });
+    }
+
+    if (
+      category.supportStatus === "advisory" &&
+      (membershipProfileIds.size > 0 || declaredProfileIds.size > 0)
+    ) {
+      const runnableProfiles = [
+        ...new Set([...membershipProfileIds, ...declaredProfileIds]),
+      ].toSorted();
+      issues.push({
+        code: "advisory-category-has-profile-membership",
+        severity: "warning",
+        categoryId: category.id,
+        message: `${category.id} is advisory metadata but belongs to runnable profile(s): ${runnableProfiles.join(", ")}`,
+      });
+    }
+
+    if (
+      category.supportStatus !== "advisory" &&
+      membershipProfileIds.size === 0 &&
+      declaredProfileIds.size === 0
+    ) {
+      issues.push({
+        code: "non-advisory-category-missing-profile-membership",
+        severity: "warning",
+        categoryId: category.id,
+        message: `${category.id} is ${category.supportStatus} but has no runnable smoke-ci or release profile membership`,
       });
     }
 

@@ -13,33 +13,9 @@ function testScorecardProfiles(categoryId = "runtime.test", profileId = "release
       lanes: [],
     },
     {
-      id: "extended",
-      description: "Test extended profile.",
-      categoryIds: profileId === "extended" ? [categoryId] : [],
-      lanes: [],
-    },
-    {
       id: "release",
       description: "Test release profile.",
       categoryIds: profileId === "release" ? [categoryId] : [],
-      lanes: [],
-    },
-    {
-      id: "soak",
-      description: "Test soak profile.",
-      categoryIds: profileId === "soak" ? [categoryId] : [],
-      lanes: [],
-    },
-    {
-      id: "advisory",
-      description: "Test advisory profile.",
-      categoryIds: profileId === "advisory" ? [categoryId] : [],
-      lanes: [],
-    },
-    {
-      id: "manual",
-      description: "Test manual profile.",
-      categoryIds: profileId === "manual" ? [categoryId] : [],
       lanes: [],
     },
   ];
@@ -63,7 +39,7 @@ describe("qa coverage report", () => {
     ]);
     expect(inventory.scorecardTaxonomy.taxonomyId).toBe("stable-lts-initial");
     expect(inventory.scorecardTaxonomy.reportOnly).toBe(true);
-    expect(inventory.scorecardTaxonomy.profileCount).toBe(6);
+    expect(inventory.scorecardTaxonomy.profileCount).toBe(2);
     expect(inventory.scorecardTaxonomy.categoryCount).toBe(16);
     expect(inventory.scorecardTaxonomy.ltsIncludedCategoryCount).toBe(7);
     expect(inventory.scorecardTaxonomy.deferredCategoryCount).toBe(8);
@@ -78,14 +54,26 @@ describe("qa coverage report", () => {
         .find((profile) => profile.id === "release")
         ?.categoryIds.toSorted(),
     ).toEqual([
+      "automation.cron",
+      "media.input",
+      "media.output",
+      "memory.failure",
+      "memory.recall",
       "plugins.runtime",
       "providers.openai",
       "runtime.agent.turns",
       "runtime.context.compaction",
+      "runtime.observability.trace",
       "runtime.tools.approval",
       "runtime.tools.core",
       "security.secrets",
+      "ui.control",
     ]);
+    expect(
+      inventory.scorecardTaxonomy.categories.find(
+        (category) => category.id === "plugins.external.compat",
+      )?.profiles,
+    ).toStrictEqual([]);
     expect(inventory.scenarioPacks.map((pack) => pack.id)).toEqual([
       "observability",
       "personal-agent",
@@ -130,9 +118,9 @@ describe("qa coverage report", () => {
     expect(report).toContain("## Scorecard Taxonomy");
     expect(report).toContain("- Taxonomy: stable-lts-initial (report-only)");
     expect(report).toContain("- Categories: 16 (7 LTS-included, 8 deferred, 1 advisory)");
-    expect(report).toContain("- Profiles: 6");
+    expect(report).toContain("- Profiles: 2");
     expect(report).toContain(
-      "- smoke-ci: 9 categories; lanes: qa-lab-smoke-ci, openclaw-multipass-channel-smoke;",
+      "- smoke-ci: 14 categories; lanes: qa-lab-smoke-ci, openclaw-multipass-channel-smoke;",
     );
     expect(report).toContain(
       "- runtime.tools.core (lts-included, release-blocking, mapped): profiles: release, smoke-ci; coverage: tools.apply-patch, tools.exec, tools.fs.read, tools.fs.write, tools.web-search;",
@@ -233,6 +221,97 @@ describe("qa coverage report", () => {
 
     expect(report.validationIssues.map((issue) => issue.code)).toEqual([
       "release-blocking-category-missing-release-profile",
+    ]);
+  });
+
+  it("reports advisory categories that are accidentally assigned to a runnable profile", () => {
+    const taxonomy = parseQaScorecardTaxonomy({
+      version: 1,
+      id: "test-taxonomy",
+      title: "Test taxonomy",
+      sourceRef: "docs/concepts/qa-e2e-automation.md",
+      status: "initial",
+      mappingAuthority: "scaffold",
+      mappingOwner: "@kevinlin-openai",
+      reportOnly: true,
+      profiles: testScorecardProfiles("plugins.external.compat", "smoke-ci"),
+      categories: [
+        {
+          id: "plugins.external.compat",
+          surfaceId: "plugins",
+          surfaceName: "Plugins",
+          categoryName: "External plugin compatibility",
+          supportStatus: "advisory",
+          releaseBlocking: false,
+          requirement: "Keep advisory compatibility out of runnable profiles.",
+          evidenceRequired: "Advisory report metadata only.",
+          evidence: {
+            profiles: [],
+            liveProofRequired: false,
+            freshness: "latest-advisory-run",
+            coverageIds: [],
+            scenarioRefs: [],
+            docsRefs: ["docs/plugins/architecture.md"],
+            codeRefs: [],
+          },
+        },
+      ],
+    });
+
+    const report = buildQaScorecardTaxonomyReport({
+      taxonomy,
+      repoRoot: process.cwd(),
+      scenarios: readQaScenarioPack().scenarios,
+    });
+
+    expect(report.validationIssues.map((issue) => issue.code)).toEqual([
+      "profile-membership-missing-category-profile",
+      "advisory-category-has-profile-membership",
+    ]);
+  });
+
+  it("reports non-advisory categories with no runnable profile membership", () => {
+    const taxonomy = parseQaScorecardTaxonomy({
+      version: 1,
+      id: "test-taxonomy",
+      title: "Test taxonomy",
+      sourceRef: "docs/concepts/qa-e2e-automation.md",
+      status: "initial",
+      mappingAuthority: "scaffold",
+      mappingOwner: "@kevinlin-openai",
+      reportOnly: true,
+      profiles: testScorecardProfiles("runtime.test", "none"),
+      categories: [
+        {
+          id: "runtime.test",
+          surfaceId: "runtime.gateway",
+          surfaceName: "Runtime",
+          categoryName: "Missing runnable profile",
+          supportStatus: "deferred",
+          releaseBlocking: false,
+          requirement: "Non-advisory rows must stay visible to runnable profiles.",
+          evidenceRequired: "At least one smoke-ci or release membership before promotion.",
+          evidence: {
+            profiles: [],
+            liveProofRequired: false,
+            freshness: "target-ref",
+            coverageIds: ["channels.dm"],
+            scenarioRefs: ["qa/scenarios/channels/dm-chat-baseline.md"],
+            docsRefs: ["docs/concepts/qa-e2e-automation.md"],
+            codeRefs: ["extensions/qa-lab/src/suite.ts"],
+          },
+        },
+      ],
+    });
+
+    const report = buildQaScorecardTaxonomyReport({
+      taxonomy,
+      repoRoot: process.cwd(),
+      scenarios: readQaScenarioPack().scenarios,
+    });
+
+    expect(report.validationIssues.map((issue) => issue.code)).toEqual([
+      "non-advisory-category-missing-profile-membership",
     ]);
   });
 
