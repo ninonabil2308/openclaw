@@ -608,6 +608,10 @@
     "target": "fs-safe Cleanup Plan"
   },
   {
+    "source": "Full release validation",
+    "target": "完整发布验证"
+  },
+  {
     "source": "Gateway",
     "target": "Gateway 网关"
   },
@@ -990,6 +994,10 @@
   {
     "source": "Maturity taxonomy outline",
     "target": "Maturity taxonomy outline"
+  },
+  {
+    "source": "Maturity tests",
+    "target": "成熟度测试"
   },
   {
     "source": "Media understanding and media generation Maturity Report",
