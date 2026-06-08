@@ -28,6 +28,7 @@ Docs: https://docs.openclaw.ai
 - Release/process: switch release trains to `YYYY.M.PATCH` monthly patch numbering, keep pre-transition tags compatible, and pin the June 2026 floor at `2026.6.5` after the published beta.
 - Platform maintenance: refresh Android, Swift/macOS, Docker, CodeQL, Buildx, Docker build/push, and Codex Action dependencies for this release train. (#74980, #81757, #86481, #86483, #90601)
 - QA Lab: add a host-only Multipass channel-driver seam for deterministic SDK-backed Telegram coverage metadata and capability-matrix artifacts. (#91502) Thanks @RomneyDa.
+- QA Lab: forward shared suite plugin and channel-driver selections through the Canonical Multipass runner. (#91506) Thanks @RomneyDa.
 
 ### Fixes
 
