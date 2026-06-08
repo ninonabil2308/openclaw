@@ -5,6 +5,10 @@ import {
   type LiveTransportCoverageLaneSummary,
 } from "./live-transports/shared/live-transport-scenarios.js";
 import { QA_SCENARIO_PACKS, type QaSeedScenarioWithSource } from "./scenario-catalog.js";
+import {
+  readQaScorecardTaxonomyReport,
+  type QaScorecardTaxonomyReport,
+} from "./scorecard-taxonomy.js";
 
 type QaCoverageScenarioSummary = {
   id: string;
@@ -56,6 +60,7 @@ type QaCoverageInventory = {
   bySurface: Record<string, QaCoverageFeatureSummary[]>;
   scenarioPacks: QaCoverageScenarioPackSummary[];
   liveTransportLanes: LiveTransportCoverageLaneSummary[];
+  scorecardTaxonomy: QaScorecardTaxonomyReport;
 };
 
 function scenarioTheme(sourcePath: string) {
@@ -265,6 +270,7 @@ export function buildQaCoverageInventory(
     bySurface,
     scenarioPacks: buildScenarioPackSummaries(scenarios),
     liveTransportLanes: buildLiveTransportCoverageLaneSummaries(),
+    scorecardTaxonomy: readQaScorecardTaxonomyReport(scenarios),
   };
 }
 
@@ -310,6 +316,52 @@ function pushScenarioPackLines(lines: string[], packs: readonly QaCoverageScenar
   }
 }
 
+function pushScorecardTaxonomyLines(lines: string[], report: QaScorecardTaxonomyReport) {
+  const mode = report.reportOnly ? "report-only" : "blocking";
+  lines.push("## Scorecard Taxonomy", "");
+  lines.push(`- Fixture: ${report.taxonomyPath ?? "missing"}`);
+  lines.push(`- Taxonomy: ${report.taxonomyId ?? "missing"} (${mode})`);
+  lines.push(`- Mapping authority: ${report.mappingAuthority ?? "unknown"}`);
+  lines.push(`- Mapping owner: ${report.mappingOwner ?? "unknown"}`);
+  lines.push(
+    `- Categories: ${report.categoryCount} (${report.ltsIncludedCategoryCount} LTS-included, ${report.deferredCategoryCount} deferred, ${report.advisoryCategoryCount} advisory)`,
+  );
+  lines.push(`- Future blocking categories: ${report.releaseBlockingCategoryCount}`);
+  lines.push(`- Mapped coverage IDs: ${report.mappedCoverageIdCount}`);
+  lines.push(`- Mapped scenarios: ${report.mappedScenarioCount}`);
+  lines.push(`- Unmapped coverage IDs: ${report.unmappedCoverageIdCount}`);
+  lines.push(`- Validation warnings: ${report.validationIssueCount}`, "");
+
+  if (report.categories.length > 0) {
+    lines.push("### Category Mapping", "");
+    for (const category of report.categories) {
+      const blocking = category.releaseBlocking ? "release-blocking" : "non-blocking";
+      const coverage = category.coverageIds.length > 0 ? category.coverageIds.join(", ") : "none";
+      const scenarios =
+        category.scenarioRefs.length > 0 ? category.scenarioRefs.join(", ") : "none";
+      lines.push(
+        `- ${category.id} (${category.supportStatus}, ${blocking}, ${category.mappingStatus}): coverage: ${coverage}; scenarios: ${scenarios}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (report.validationIssues.length > 0) {
+    lines.push("### Validation Warnings", "");
+    for (const issue of report.validationIssues) {
+      const category = issue.categoryId ? `${issue.categoryId}: ` : "";
+      lines.push(`- ${issue.code}: ${category}${issue.message}`);
+    }
+    lines.push("");
+  }
+
+  if (report.unmappedCoverageIds.length > 0) {
+    lines.push("### Unmapped Coverage IDs", "");
+    lines.push(report.unmappedCoverageIds.join(", "));
+    lines.push("");
+  }
+}
+
 export function renderQaCoverageMarkdownReport(inventory: QaCoverageInventory): string {
   const lines: string[] = [
     "# QA Coverage Inventory",
@@ -348,6 +400,8 @@ export function renderQaCoverageMarkdownReport(inventory: QaCoverageInventory): 
     pushLiveTransportLines(lines, inventory.liveTransportLanes);
     lines.push("");
   }
+
+  pushScorecardTaxonomyLines(lines, inventory.scorecardTaxonomy);
 
   if (inventory.overlappingCoverage.length > 0) {
     lines.push("## Overlap", "");

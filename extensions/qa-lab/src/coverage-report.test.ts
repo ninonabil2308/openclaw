@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildQaCoverageInventory, renderQaCoverageMarkdownReport } from "./coverage-report.js";
 import { readQaScenarioPack } from "./scenario-catalog.js";
+import { buildQaScorecardTaxonomyReport, parseQaScorecardTaxonomy } from "./scorecard-taxonomy.js";
 
 describe("qa coverage report", () => {
   it("groups scenario coverage metadata by theme and surface", () => {
@@ -19,6 +20,17 @@ describe("qa coverage report", () => {
       "telegram",
       "whatsapp",
     ]);
+    expect(inventory.scorecardTaxonomy.taxonomyId).toBe("stable-lts-initial");
+    expect(inventory.scorecardTaxonomy.reportOnly).toBe(true);
+    expect(inventory.scorecardTaxonomy.categoryCount).toBe(16);
+    expect(inventory.scorecardTaxonomy.ltsIncludedCategoryCount).toBe(7);
+    expect(inventory.scorecardTaxonomy.deferredCategoryCount).toBe(8);
+    expect(inventory.scorecardTaxonomy.advisoryCategoryCount).toBe(1);
+    expect(inventory.scorecardTaxonomy.releaseBlockingCategoryCount).toBe(7);
+    expect(inventory.scorecardTaxonomy.mappedCoverageIdCount).toBeGreaterThan(0);
+    expect(inventory.scorecardTaxonomy.mappedScenarioCount).toBeGreaterThan(0);
+    expect(inventory.scorecardTaxonomy.unmappedCoverageIdCount).toBeGreaterThan(0);
+    expect(inventory.scorecardTaxonomy.validationIssues).toStrictEqual([]);
     expect(inventory.scenarioPacks.map((pack) => pack.id)).toEqual([
       "observability",
       "personal-agent",
@@ -60,5 +72,98 @@ describe("qa coverage report", () => {
       "- telegram (telegram): canary: always-on, help-command: telegram-help-command, mention-gating: telegram-mention-gating; missing baseline: allowlist-block, top-level-reply-shape, restart-resume",
     );
     expect(report).toContain("thread-follow-up: slack-thread-follow-up");
+    expect(report).toContain("## Scorecard Taxonomy");
+    expect(report).toContain("- Taxonomy: stable-lts-initial (report-only)");
+    expect(report).toContain("- Categories: 16 (7 LTS-included, 8 deferred, 1 advisory)");
+    expect(report).toContain(
+      "- runtime.tools.core (lts-included, release-blocking, mapped): coverage: tools.apply-patch, tools.exec, tools.fs.read, tools.fs.write, tools.web-search;",
+    );
+    expect(report).toContain("### Unmapped Coverage IDs");
+    expect(report).toContain("agents.subagents");
+  });
+
+  it("reports taxonomy mapping gaps without making closure blocking", () => {
+    const taxonomy = parseQaScorecardTaxonomy({
+      version: 1,
+      id: "test-taxonomy",
+      title: "Test taxonomy",
+      sourceRef: "docs/concepts/qa-e2e-automation.md",
+      status: "initial",
+      mappingAuthority: "scaffold",
+      mappingOwner: "@kevinlin-openai",
+      reportOnly: true,
+      categories: [
+        {
+          id: "runtime.test",
+          surfaceId: "runtime.gateway",
+          surfaceName: "Runtime",
+          categoryName: "Missing test mapping",
+          supportStatus: "lts-included",
+          releaseBlocking: true,
+          requirement: "Exercise a missing mapping.",
+          evidenceRequired: "A real scenario mapping before promotion.",
+          evidence: {
+            requiredTiers: ["core"],
+            liveProofRequired: false,
+            freshness: "target-ref",
+            coverageIds: ["runtime.missing-coverage"],
+            scenarioRefs: ["qa/scenarios/runtime/missing-scorecard-scenario.md"],
+            docsRefs: ["docs/missing-scorecard-doc.md"],
+            codeRefs: ["src/missing-scorecard-code.ts"],
+          },
+        },
+      ],
+    });
+
+    const report = buildQaScorecardTaxonomyReport({
+      taxonomy,
+      repoRoot: process.cwd(),
+      scenarios: readQaScenarioPack().scenarios,
+    });
+
+    expect(report.reportOnly).toBe(true);
+    expect(report.categories[0]?.mappingStatus).toBe("partial");
+    expect(report.validationIssues.map((issue) => issue.code)).toEqual([
+      "coverage-id-not-found",
+      "scenario-ref-not-found",
+      "docs-ref-not-found",
+      "code-ref-not-found",
+    ]);
+  });
+
+  it("rejects taxonomy refs outside the repository", () => {
+    expect(() =>
+      parseQaScorecardTaxonomy({
+        version: 1,
+        id: "bad-taxonomy",
+        title: "Bad taxonomy",
+        sourceRef: "../rfcs/rfcs/0007-e2e-qa-lab-scorecard-consolidation.md",
+        status: "initial",
+        mappingAuthority: "scaffold",
+        mappingOwner: "@kevinlin-openai",
+        reportOnly: true,
+        categories: [
+          {
+            id: "runtime.test",
+            surfaceId: "runtime.gateway",
+            surfaceName: "Runtime",
+            categoryName: "Bad docs ref",
+            supportStatus: "deferred",
+            releaseBlocking: false,
+            requirement: "Reject escaped refs.",
+            evidenceRequired: "Parser rejects refs outside the repository.",
+            evidence: {
+              requiredTiers: ["core"],
+              liveProofRequired: false,
+              freshness: "target-ref",
+              coverageIds: ["runtime.delivery"],
+              scenarioRefs: ["qa/scenarios/channels/dm-chat-baseline.md"],
+              docsRefs: ["/tmp/outside-openclaw.md"],
+              codeRefs: ["src/agents/../agents/agent-tools.ts"],
+            },
+          },
+        ],
+      }),
+    ).toThrow("repo refs must not be absolute or contain parent-directory segments");
   });
 });
