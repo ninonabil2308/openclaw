@@ -37,6 +37,7 @@ import {
 } from "./jsonl-replay.js";
 import { startQaLabServer } from "./lab-server.js";
 import { runQaManualLane } from "./manual-lane.runtime.js";
+import { resolveQaMultipassChannelDriverSelection } from "./multipass-channel-driver.js";
 import { runQaMultipass } from "./multipass.runtime.js";
 import { DEFAULT_QA_LIVE_PROVIDER_MODE, getQaProvider } from "./providers/index.js";
 import {
@@ -553,6 +554,8 @@ export async function runQaSuiteCommand(opts: {
   repoRoot?: string;
   outputDir?: string;
   transportId?: string;
+  channelDriver?: string;
+  channel?: string;
   runner?: string;
   providerMode?: QaProviderModeInput;
   primaryModel?: string;
@@ -576,6 +579,10 @@ export async function runQaSuiteCommand(opts: {
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
   const transportId = normalizeQaTransportId(opts.transportId);
+  const channelDriverSelection = resolveQaMultipassChannelDriverSelection({
+    channel: opts.channel,
+    channelDriver: opts.channelDriver,
+  });
   const runner = (opts.runner ?? "host").trim().toLowerCase();
   const explicitScenarioIds = resolveQaScenarioPackScenarioIds({
     pack: opts.pack,
@@ -600,6 +607,9 @@ export async function runQaSuiteCommand(opts: {
   const alternateModel = normalizeQaOptionalModelRef(opts.alternateModel);
   if (opts.preflight === true && runner !== "host") {
     throw new Error("--preflight requires --runner host.");
+  }
+  if (channelDriverSelection && runner !== "host") {
+    throw new Error("--channel-driver multipass requires --runner host.");
   }
   if (
     runner === "host" &&
@@ -666,6 +676,7 @@ export async function runQaSuiteCommand(opts: {
     repoRoot,
     outputDir: resolveRepoRelativeOutputDir(repoRoot, opts.outputDir),
     transportId,
+    ...(channelDriverSelection ? { channelDriverSelection } : {}),
     providerMode,
     primaryModel,
     alternateModel,

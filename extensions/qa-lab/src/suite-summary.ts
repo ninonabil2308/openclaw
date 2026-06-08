@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import type { QaProviderMode } from "./model-selection.js";
+import type { QaMultipassChannelDriverSelection } from "./multipass-channel-driver.js";
 import type { RuntimeId, RuntimeParityResult } from "./runtime-parity.js";
 
 type QaSuiteSummaryScenario = {
@@ -52,6 +53,11 @@ export type QaSuiteSummaryJson = {
     alternateModelName: string | null;
     fastMode: boolean;
     concurrency: number;
+    channelDriver: QaMultipassChannelDriverSelection["channelDriver"] | null;
+    channel: QaMultipassChannelDriverSelection["channel"] | null;
+    channelLive: boolean | null;
+    channelDriverId: QaMultipassChannelDriverSelection["channelDriverId"] | null;
+    channelCapabilityMatrixPath: string | null;
     scenarioIds: string[] | null;
     runtimePair?: [RuntimeId, RuntimeId] | null;
   };

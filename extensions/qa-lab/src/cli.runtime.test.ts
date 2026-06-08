@@ -265,6 +265,49 @@ describe("qa cli runtime", () => {
     });
   });
 
+  it("passes Multipass channel-driver selection into host suite runs", async () => {
+    await runQaSuiteCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      outputDir: ".artifacts/qa/multipass-telegram",
+      providerMode: "mock-openai",
+      channelDriver: "multipass",
+      channel: "telegram",
+      scenarioIds: ["channel-chat-baseline"],
+    });
+
+    expect(runQaSuiteFromRuntime).toHaveBeenCalledWith({
+      repoRoot: path.resolve("/tmp/openclaw-repo"),
+      outputDir: path.resolve("/tmp/openclaw-repo", ".artifacts/qa/multipass-telegram"),
+      transportId: "qa-channel",
+      channelDriverSelection: {
+        capabilityMatrixPath: "multipass-channel-capability-matrix.json",
+        channel: "telegram",
+        channelDriver: "multipass",
+        channelDriverId: "telegram-local-v1",
+        channelLive: false,
+      },
+      providerMode: "mock-openai",
+      primaryModel: undefined,
+      alternateModel: undefined,
+      fastMode: undefined,
+      scenarioIds: ["channel-chat-baseline"],
+    });
+  });
+
+  it("keeps Multipass channel-driver independent from the VM runner", async () => {
+    await expect(
+      runQaSuiteCommand({
+        repoRoot: "/tmp/openclaw-repo",
+        providerMode: "mock-openai",
+        channelDriver: "multipass",
+        channel: "telegram",
+        runner: "multipass",
+      }),
+    ).rejects.toThrow("--channel-driver multipass requires --runner host.");
+    expect(runQaSuiteFromRuntime).not.toHaveBeenCalled();
+    expect(runQaMultipass).not.toHaveBeenCalled();
+  });
+
   it("passes explicit suite plugin enablements into the host gateway run", async () => {
     await runQaSuiteCommand({
       repoRoot: "/tmp/openclaw-repo",
